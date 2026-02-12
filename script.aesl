@@ -1,0 +1,124 @@
+<!DOCTYPE aesl-source>
+<network>
+
+
+<!--list of global events-->
+
+
+<!--list of constants-->
+<constant value="0" name="FORWARD"/>
+<constant value="1" name="LEFT"/>
+<constant value="2" name="RIGHT"/>
+<constant value="3" name="GOAROUND"/>
+<constant value="4" name="FINDLINE"/>
+<constant value="5" name="STOP"/>
+<constant value="200" name="TURNSPEED"/>
+<constant value="700" name="GROUNDTHRESHOLD"/>
+<constant value="915" name="TURNTIME"/>
+<constant value="200" name="STRAIGHTSPEED"/>
+<constant value="2000" name="HORIZONTALTHRESHOLD"/>
+<constant value="1750" name="FORWARDTIME"/>
+<constant value="100" name="GOAROUNDSPEED"/>
+
+
+<!--show keywords state-->
+<keywords flag="true"/>
+
+
+<!--node thymio-II-->
+<node nodeId="1" name="thymio-II">var state
+var error
+
+var turn
+var left
+var right
+
+var goAroundState = 0
+
+state = STOP
+
+
+timer.period[0] = 0
+timer.period[1] = 0
+
+onevent button.forward
+	state = FORWARD
+	motor.left.target = STRAIGHTSPEED
+	motor.right.target =STRAIGHTSPEED
+	
+
+onevent button.backward
+	state = STOP
+	motor.left.target = 0
+	motor.right.target = 0
+	
+onevent prox
+	# get left and right ground readings
+	left = prox.ground.delta[0]
+	right = prox.ground.delta[1]
+	
+	# calculations
+	error = left-right
+	turn = error/5
+	if  state != STOP and state != GOAROUND then # dont run when in stopped or while currentley avoiding an object
+		if  left > GROUNDTHRESHOLD and right > GROUNDTHRESHOLD then # could be failure detection code
+			timer.period[0] = 0
+		else
+			motor.left.target = STRAIGHTSPEED + turn # sets motors
+			motor.right.target = STRAIGHTSPEED - turn
+			timer.period[0] = 0
+		end
+		 # checks if there is a block through horizontal sensors
+		if prox.horizontal[2] > GROUNDTHRESHOLD or (prox.horizontal[1] > GROUNDTHRESHOLD) or (prox.horizontal[5] > GROUNDTHRESHOLD) then
+			state = GOAROUND # set state
+			motor.left.target = STRAIGHTSPEED  # begin goaround routine by turning 90 and setting timer 
+			motor.right.target = -STRAIGHTSPEED
+			timer.period[1] = TURNTIME*2 # timer period is set to be 90 degree turn 
+		end
+	end
+	
+	#if ( left &lt; GROUNDTHRESHOLD or right &lt; GROUNDTHRESHOLD) and state==GOAROUND then
+	#	state = FORWARD
+	#end
+	
+	
+	
+# go around code 
+onevent timer1
+	if  goAroundState == 0 then # after first turn
+		motor.left.target = STRAIGHTSPEED # go forward
+		motor.right.target = STRAIGHTSPEED
+		timer.period[1] = FORWARDTIME
+		goAroundState = 1
+	elseif goAroundState == 1 then  # turn back towards course
+		motor.left.target = -STRAIGHTSPEED 
+		motor.right.target = STRAIGHTSPEED
+		timer.period[1] = TURNTIME
+		goAroundState = 2
+	
+	elseif goAroundState == 2 then # go straight around block
+		motor.left.target = STRAIGHTSPEED
+		motor.right.target = STRAIGHTSPEED
+		timer.period[1] = 3300
+		goAroundState = 3
+	
+	elseif goAroundState == 3 then
+		motor.left.target = -STRAIGHTSPEED
+		motor.right.target = STRAIGHTSPEED
+		timer.period[1] = TURNTIME/2
+		goAroundState = 4
+	elseif  goAroundState == 4 then
+		state = FORWARD
+		motor.left.target = GOAROUNDSPEED
+		motor.right.target = GOAROUNDSPEED
+		goAroundState = 0
+		timer.period[1] = 0
+	end
+
+onevent timer0 # handle error if we implement that
+	motor.left.target = TURNSPEED
+	motor.right.target = -TURNSPEED
+	timer.period[0] = 0</node>
+
+
+</network>
