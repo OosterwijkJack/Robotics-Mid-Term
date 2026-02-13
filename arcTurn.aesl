@@ -1,0 +1,90 @@
+<!DOCTYPE aesl-source>
+<network>
+
+
+<!--list of global events-->
+
+
+<!--list of constants-->
+
+
+<!--show keywords state-->
+<keywords flag="true"/>
+
+
+<!--node thymio-II-->
+<node nodeId="1" name="thymio-II">var state = 0
+var go = 0
+var phase = 0        # 0=straight, 1=turning left, 2=turning right, 3=finish
+var stap = 0         # Current step in the turn sequence
+var leftBase = 200
+var rightBase = 200
+var stepAmount = 50
+
+onevent button.forward
+    state = 1
+    
+onevent button.backward
+    motor.left.target = 0
+    motor.right.target = 0
+    state = 0
+    go = 0
+    phase = 0
+    stap = 0
+    
+onevent prox
+    if state == 1 and go == 0 then
+        # Start: go straight briefly
+        motor.left.target = leftBase
+        motor.right.target = rightBase
+        go = 1
+        phase = 1
+        stap = 0
+        timer.period[0] = 500   # 200ms updates for smooth ramp
+    end
+
+# Main sequence timer - smooth transition from left to right turn
+onevent timer0
+    if phase == 1 then
+        # Phase 1: Increasing left turn (left wheel slows down)
+        # step 0 to 5: left goes 150 down to 90, right stays 150
+        if stap &lt; 5 then
+            motor.left.target = leftBase - (stap * stepAmount)   # 150, 138, 126, 114, 102
+            motor.right.target = rightBase
+            stap = stap + 1
+        else
+            # Peak left turn reached, transition to right turn
+            phase = 2
+            stap = 0
+        end
+        
+    elseif phase == 2 then
+        # Phase 2: Decreasing left, increasing right
+        # left wheel speeds back up, right wheel slows down
+        if stap &lt; 10 then
+            motor.left.target = leftBase + (stap * stepAmount)    # 90, 102, 114, 126, 138
+            motor.right.target = rightBase - (stap * stepAmount)  # 150, 138, 126, 114, 102
+            stap = stap + 1
+        else
+            # Now turning right, transition to straighten
+            phase = 3
+            stap = 0
+        end
+        
+    elseif phase == 3 then
+        # Phase 3: Straighten out (reduce right turn)
+        if stap &lt; 5 then
+            motor.left.target = leftBase
+            motor.right.target = rightBase + (stap * stepAmount)   # 90, 102, 114, 126, 138
+            stap = stap + 1
+        else
+            # Done - go straight
+            motor.left.target = leftBase
+            motor.right.target = rightBase
+            timer.period[0] = 0     # Stop timer
+            phase = 0
+        end
+    end</node>
+
+
+</network>
