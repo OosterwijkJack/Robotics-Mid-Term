@@ -1,0 +1,215 @@
+<!DOCTYPE aesl-source>
+<network>
+
+
+<!--list of global events-->
+
+
+<!--list of constants-->
+<constant value="0" name="FORWARD"/>
+<constant value="1" name="LEFT"/>
+<constant value="2" name="RIGHT"/>
+<constant value="3" name="GOAROUND"/>
+<constant value="4" name="FINDLINE"/>
+<constant value="5" name="STOP"/>
+<constant value="200" name="TURNSPEED"/>
+<constant value="700" name="GROUNDTHRESHOLD"/>
+<constant value="915" name="TURNTIME"/>
+<constant value="2000" name="HORIZONTALTHRESHOLD"/>
+<constant value="1750" name="FORWARDTIME"/>
+<constant value="100" name="GOAROUNDSPEED"/>
+<constant value="20" name="STEP"/>
+<constant value="10" name="OBSERVE"/>
+
+
+<!--show keywords state-->
+<keywords flag="true"/>
+
+
+<!--node thymio-II-->
+<node nodeId="1" name="thymio-II">var state = STOP
+var error
+
+var turn
+var left
+var right
+
+var leftH
+var rightH
+
+var STRAIGHTSPEED = 150
+
+var turnState = 0
+var innerState = 0
+var i = 0
+var leftSpeed = STRAIGHTSPEED
+var rightSpeed = STRAIGHTSPEED
+var foundLine = 0
+var turnL = 0
+
+var tmp1 
+var tmp2
+
+state = STOP
+motor.left.target = 0
+motor.right.target = 0
+
+
+
+timer.period[0] = 0
+timer.period[1] = 0
+
+onevent button.forward
+	state = FORWARD
+	motor.left.target = STRAIGHTSPEED
+	motor.right.target =STRAIGHTSPEED
+	
+
+onevent button.backward
+	state = STOP
+	motor.left.target = 0
+	motor.right.target = 0
+	
+onevent prox
+	# get left and right ground readings
+	left = prox.ground.delta[0]
+	right = prox.ground.delta[1]
+	
+	leftH = prox.horizontal[1]
+	rightH = prox.horizontal[3]
+	
+	# calculations
+	error = left-right
+	turn = error/5
+	if  state != STOP and state != GOAROUND then # dont run when in stopped or while currentley avoiding an object
+		
+		if left - right &lt; 0 then
+			tmp1 = -1 * (left-right)
+		else
+			tmp1 = left-right
+		end
+		
+		if (tmp1 &lt; 200) and (left &lt; 300 or right &lt; 300) and state == OBSERVE then
+			foundLine = 1
+			if  turnL == 1 then
+				motor.left.target = -STRAIGHTSPEED
+				motor.right.target = STRAIGHTSPEED
+			else
+				motor.left.target = STRAIGHTSPEED
+				motor.right.target = -STRAIGHTSPEED
+			end
+		
+		elseif  (left &lt; 300 or right &lt; 300) then
+			motor.left.target = STRAIGHTSPEED + turn # sets motors
+			motor.right.target = STRAIGHTSPEED - turn
+			timer.period[1] = 0
+			foundLine = 1
+		end
+		
+		#if  state == GOAROUND and( left > 300 or right > 300)  then # once robot has left line in goaround state but it in forward
+		#	state = FORWARD
+		#end
+		
+		 # checks if there is a block through horizontal sensors
+		if prox.horizontal[2] > GROUNDTHRESHOLD or (prox.horizontal[1] > GROUNDTHRESHOLD) then
+			STRAIGHTSPEED = 200
+			if  leftH - rightH > 0 then
+				turnL = 1
+			else
+				turnL = 0
+			end
+			
+			turnState = 0
+			innerState = 0
+			state = GOAROUND # set state
+			timer.period[1] = 1
+			foundLine = 0
+		end
+	end
+	
+	#if ( left &lt; GROUNDTHRESHOLD or right &lt; GROUNDTHRESHOLD) and state==GOAROUND then
+	#	state = FORWARD
+	#end
+	
+	
+	
+# go around code 
+onevent timer1
+	if foundLine == 1 then # exit
+		timer.period[1] = 0
+		state = FORWARD
+		turnState = 0
+		innerState = 0
+		leftSpeed = STRAIGHTSPEED 
+		rightSpeed = STRAIGHTSPEED
+		#STRAIGHTSPEED = 100
+		timer.period[0] = 1000
+
+	elseif  turnState == 0 then # initi turn away from block
+		if  turnL == 1 then
+			leftSpeed = -STRAIGHTSPEED
+			rightSpeed = STRAIGHTSPEED 
+		else
+			leftSpeed = STRAIGHTSPEED
+			rightSpeed = -STRAIGHTSPEED 
+		end
+		
+		timer.period[1] = 750
+		turnState = 1
+	elseif turnState == 1 then # go straught
+		leftSpeed = STRAIGHTSPEED
+		rightSpeed = STRAIGHTSPEED
+		turnState = 2
+		timer.period[1] = 625
+	elseif  turnState == 2 then # begin arching back to line
+		#STRAIGHTSPEED = 100
+		state = OBSERVE
+		if turnL == 1 then
+			leftSpeed += STEP
+		else
+			rightSpeed += STEP
+		end
+		
+		timer.period[1] = 100
+		innerState += 1
+			
+		if  innerState == 17 then
+			turnState = 3
+			innerState = 0
+			timer.period[0] = 1
+		end
+	elseif  turnState == 3 then # begin easing the arc
+		STRAIGHTSPEED = 200
+		if turnL == 1 then
+			leftSpeed -= STEP
+			#rightSpeed += STEP
+		else
+			rightSpeed -= STEP
+		end
+		
+		
+		timer.period[1] = 100
+		innerState += 1
+			
+		if  innerState == 10 then
+			turnState = 3
+			innerState = 0
+			timer.period[1] = 0
+			leftSpeed = STRAIGHTSPEED
+			rightSpeed = STRAIGHTSPEED
+		end
+	end
+	
+	if  foundLine == 0 then
+		motor.left.target = leftSpeed 
+		motor.right.target = rightSpeed 
+
+	end
+	
+
+
+	
+	</node>
+
+
+</network>
